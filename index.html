@@ -303,6 +303,32 @@
   .quizopt{display:block; width:100%; text-align:left; padding:14px 16px; border:1.5px solid var(--line); border-radius:var(--radius); background:var(--white); font-weight:600; cursor:pointer; margin-bottom:10px; color:var(--ink);}
   .quizopt:hover{border-color:var(--forest);}
 
+  /* ---- timer bar (Sort It Right / Waste Wise Quiz) ---- */
+  .timerbar{width:100%; max-width:340px; height:6px; background:var(--line); border-radius:99px; overflow:hidden; margin:10px 0 4px;}
+  .timerfill{height:100%; background:var(--signal); border-radius:99px; transition:width 0.2s linear;}
+
+  /* ---- Trash Ninja ---- */
+  .ninja-hud{display:flex; flex-wrap:wrap; align-items:center; gap:18px; margin:12px 0 10px; font-family:'Barlow Condensed',sans-serif; font-weight:700; color:var(--forest-dark);}
+  .ninja-stat{font-size:1rem; letter-spacing:0.3px;}
+  .ninja-stat strong{font-size:1.25rem; margin-left:4px;}
+  .ninja-lives{font-size:1.15rem; letter-spacing:2px;}
+  .ninja-combo{font-size:1.05rem; color:var(--signal-dark); opacity:0; transition:opacity 0.25s ease; font-weight:900;}
+  .ninja-wrap{position:relative; max-width:640px; margin-top:4px;}
+  .ninja-canvas{width:100%; height:420px; display:block; background:linear-gradient(160deg, #0B2A3E 0%, #123F2C 30%, #1F5A3C 60%, #6B8F71 85%, #E8A227 100%); border-radius:var(--radius); touch-action:none; cursor:crosshair; border:1px solid var(--line);}
+  .ninja-rules-list{margin:0; padding-left:20px; display:flex; flex-direction:column; gap:10px;}
+  .ninja-rules-list li{color:var(--ink-soft);}
+  .ninja-rules-list strong{color:var(--ink);}
+  .ninja-flash{position:absolute; inset:0; background:var(--clay); opacity:0; pointer-events:none; border-radius:var(--radius); transition:opacity 0.35s ease;}
+
+  /* ---- Litter Patrol ---- */
+  .litter-scene{position:relative; width:100%; max-width:640px; aspect-ratio:16/10; border-radius:var(--radius); overflow:hidden; border:1px solid var(--line); margin-top:10px;}
+  .litter-theme-river{background:linear-gradient(180deg,#BFE0D8 0%,#8FBFA0 55%,#5E8F63 100%);}
+  .litter-theme-market{background:linear-gradient(180deg,#E9DCC0 0%,#D9C79E 55%,#B79A6B 100%);}
+  .litter-theme-beach{background:linear-gradient(180deg,#BFE3EC 0%,#E7DCB0 60%,#D8C287 100%);}
+  .litter-spot{position:absolute; font-size:1.7rem; line-height:1; cursor:pointer; background:none; border:none; padding:6px; transform:translate(-50%,-50%); transition:transform 0.15s ease, opacity 0.25s ease; filter:drop-shadow(0 2px 2px rgba(0,0,0,0.25));}
+  .litter-spot:hover{transform:translate(-50%,-50%) scale(1.18);}
+  .litter-spot.found{opacity:0; transform:translate(-50%,-50%) scale(0.4); pointer-events:none;}
+
   /* watch & earn */
   .vidgrid{display:grid; grid-template-columns:repeat(auto-fill, minmax(260px,1fr)); gap:18px; margin-top:10px;}
   .vidcard{background:var(--white); border:1px solid var(--line); border-radius:var(--radius); overflow:hidden; display:flex; flex-direction:column;}
@@ -599,9 +625,12 @@ const state = {
   plantCapture: { eventId:null, verifiedEvent:null, stream:null, recorder:null, chunks:[], blobUrl:null, recording:false },
   idcardCapture: { stream:null, photoData:null },
   loginFlow: { mobile:'', stage:'mobile' }, // stage: 'mobile' (enter number) | 'signup' (new number, create digital ID)
-  activeGame: null,            // null | 'sort' | 'quiz'
+  activeGame: null,            // null | 'ninja' | 'sort' | 'quiz' | 'litter' | 'water'
+  ninjaGame: null,
   sortGame: null,
   quizGame: null,
+  litterGame: null,
+  waterGame: null,
   authority: { loggedIn:false, role:'', section:'overview', org:'', username:'' }
 };
 const ytPlayers = {}; // videoId -> YT.Player instance, learn/watch section
@@ -717,11 +746,90 @@ const QUIZ_QUESTIONS = [
   { q:'A broken glass bottle should go in the...', options:['Wet waste bin','Dry waste bin, wrapped safely','Hazardous bin'], answer:1 },
   { q:"Why does sorting waste at home actually matter?", options:['It makes recycling and composting far more effective','It has no effect once collected','It only matters for hazardous items'], answer:0 }
 ];
+
+/* ---- Trash Ninja: sliceable items. wet = swipe, dry = tap, hazard = never touch ---- */
+const NINJA_ITEMS = [
+  { name:'Banana peel', emoji:'🍌', kind:'wet' },
+  { name:'Watermelon rind', emoji:'🍉', kind:'wet' },
+  { name:'Orange peel', emoji:'🍊', kind:'wet' },
+  { name:'Leftover curry', emoji:'🍛', kind:'wet' },
+  { name:'Coconut husk', emoji:'🥥', kind:'wet' },
+  { name:'Vegetable peels', emoji:'🥕', kind:'wet' },
+  { name:'Plastic bottle', emoji:'🧴', kind:'dry' },
+  { name:'Glass bottle', emoji:'🍾', kind:'dry' },
+  { name:'Cardboard box', emoji:'📦', kind:'dry' },
+  { name:'Aluminium can', emoji:'🥫', kind:'dry' },
+  { name:'Newspaper', emoji:'📰', kind:'dry' },
+  { name:'Old magazine', emoji:'📖', kind:'dry' },
+  { name:'Dead battery', emoji:'🔋', kind:'hazard' },
+  { name:'Broken CFL bulb', emoji:'💡', kind:'hazard' },
+  { name:'Expired medicine', emoji:'💊', kind:'hazard' },
+  { name:'Old paint can', emoji:'🎨', kind:'hazard' },
+  { name:'Broken thermometer', emoji:'🌡️', kind:'hazard' },
+  { name:'Gas cylinder', emoji:'🛢️', kind:'hazard' }
+];
+
+/* ---- Litter Patrol: find-the-litter scenes ---- */
+const LITTER_SCENES = [
+  { name:'Riverside path', theme:'river', spots:[
+      { emoji:'🥤', left:12, top:72, litter:true },
+      { emoji:'🛍️', left:26, top:50, litter:true },
+      { emoji:'🧃', left:46, top:80, litter:true },
+      { emoji:'🧴', left:64, top:38, litter:true },
+      { emoji:'🥫', left:80, top:64, litter:true },
+      { emoji:'📄', left:36, top:28, litter:true },
+      { emoji:'🌳', left:8, top:18, litter:false },
+      { emoji:'🦆', left:56, top:14, litter:false },
+      { emoji:'🚲', left:75, top:20, litter:false },
+      { emoji:'🪑', left:50, top:58, litter:false }
+    ]},
+  { name:'Market street', theme:'market', spots:[
+      { emoji:'🥡', left:15, top:66, litter:true },
+      { emoji:'🧻', left:34, top:45, litter:true },
+      { emoji:'🍶', left:58, top:74, litter:true },
+      { emoji:'🥤', left:70, top:34, litter:true },
+      { emoji:'📦', left:22, top:30, litter:true },
+      { emoji:'🧃', left:85, top:58, litter:true },
+      { emoji:'🚗', left:10, top:16, litter:false },
+      { emoji:'🐕', left:46, top:20, litter:false },
+      { emoji:'🏮', left:64, top:14, litter:false },
+      { emoji:'🚦', left:90, top:22, litter:false }
+    ]},
+  { name:'Beach shore', theme:'beach', spots:[
+      { emoji:'🧴', left:18, top:68, litter:true },
+      { emoji:'🥤', left:40, top:80, litter:true },
+      { emoji:'🛍️', left:60, top:60, litter:true },
+      { emoji:'🍾', left:76, top:44, litter:true },
+      { emoji:'📄', left:30, top:36, litter:true },
+      { emoji:'🥫', left:88, top:70, litter:true },
+      { emoji:'🏖️', left:10, top:18, litter:false },
+      { emoji:'🦀', left:50, top:20, litter:false },
+      { emoji:'⛱️', left:68, top:16, litter:false },
+      { emoji:'🐚', left:24, top:14, litter:false }
+    ]}
+];
+
+/* ---- Water Wise: speed-round questions ---- */
+const WATER_QUESTIONS = [
+  { q:'Turning off the tap while brushing your teeth can save several litres of water a day.', options:['True','False'], answer:0 },
+  { q:'A single dripping tap can waste over 3,000 litres of water a year.', options:['True','False'], answer:0 },
+  { q:'Which uses less water: a bucket bath or a long shower?', options:['Bucket bath','Long shower'], answer:0 },
+  { q:'Watering plants in the early morning or evening loses less water to evaporation.', options:['True','False'], answer:0 },
+  { q:'Running a full load of laundry instead of several small ones saves water.', options:['True','False'], answer:0 },
+  { q:'Fixing a leaking pipe as soon as you notice it is worth the effort.', options:['True','False'], answer:0 },
+  { q:'Which uses more water to grow, per kilogram: rice or millet?', options:['Rice','Millet'], answer:0 },
+  { q:'Reusing water from washing vegetables to water plants is a good habit.', options:['True','False'], answer:0 }
+];
+
 const CREDIT_CONFIG = {
   gameRewards: {
-    sortMax: 10,
-    quizMax: 10
-  }
+    ninjaMax: 15,
+    sortMax: 12,
+    quizMax: 12,
+    litterMax: 12,
+    waterMax: 12
+  },
+  videoReward: 8
 };
 
 const LEARN_VIDEOS = [
@@ -989,7 +1097,7 @@ function setView(v){
   stopPlantCamera();
   stopIdCardCamera();
   stopPoll();
-  if(v !== 'learn') state.activeGame = null;
+  if(v !== 'learn'){ stopMiniGames(); state.activeGame = null; }
   if(v === 'idcard') v = 'account';
   state.view = v;
   if(v === 'record'){
@@ -1892,8 +2000,11 @@ function startLeaderboardPoll(){
 
 /* ================= LEARN & PLAY ================= */
 function viewLearn(){
+  if(state.activeGame === 'ninja') return learnShell(renderNinjaGame());
   if(state.activeGame === 'sort') return learnShell(renderSortGame());
   if(state.activeGame === 'quiz') return learnShell(renderQuizGame());
+  if(state.activeGame === 'litter') return learnShell(renderLitterGame());
+  if(state.activeGame === 'water') return learnShell(renderWaterGame());
   return learnHub();
 }
 function learnShell(inner){
@@ -1916,32 +2027,39 @@ function learnHub(){
   <section class="section">
     <div class="gamegrid">
       <div class="gamecard">
+        <div class="gicon">🥷</div>
+        <div class="gtitle">Trash Ninja</div>
+        <p class="gblurb">Swipe through wet waste like a fruit-ninja slice. Tap dry waste once instead. Hazardous items are bombs — let them fly past, never touch.</p>
+        <div class="greward">${CREDIT_CONFIG.gameRewards.ninjaMax} credits a round</div>
+        <button type="button" class="btn signal" data-game="ninja">Play</button>
+      </div>
+      <div class="gamecard">
         <div class="gicon">🗑️</div>
         <div class="gtitle">Sort It Right</div>
-        <p class="gblurb">Ten items, one at a time. Drop each into wet, dry or hazardous before you second-guess yourself.</p>
+        <p class="gblurb">Ten items, one at a time, five seconds each. Drop each into wet, dry or hazardous before the timer runs out.</p>
         <div class="greward">${CREDIT_CONFIG.gameRewards.sortMax} credits a round</div>
         <button type="button" class="btn signal" data-game="sort">Play</button>
       </div>
       <div class="gamecard">
         <div class="gicon">🧠</div>
         <div class="gtitle">Waste Wise Quiz</div>
-        <p class="gblurb">Eight quick questions on segregation, composting and recycling myths.</p>
+        <p class="gblurb">Eight quick questions on segregation, composting and recycling myths, against the clock.</p>
         <div class="greward">${CREDIT_CONFIG.gameRewards.quizMax} credits a round</div>
         <button type="button" class="btn signal" data-game="quiz">Play</button>
       </div>
-      <div class="gamecard soon">
+      <div class="gamecard">
         <div class="gicon">🔍</div>
         <div class="gtitle">Litter Patrol</div>
-        <p class="gblurb">Spot the litter hiding in a street scene before the clock runs out.</p>
-        <div class="greward">Coming soon</div>
-        <button type="button" class="btn secondary" disabled>Coming soon</button>
+        <p class="gblurb">Spot the litter hiding in a street scene before the clock runs out — leave the trees and wildlife alone.</p>
+        <div class="greward">${CREDIT_CONFIG.gameRewards.litterMax} credits a round</div>
+        <button type="button" class="btn signal" data-game="litter">Play</button>
       </div>
-      <div class="gamecard soon">
+      <div class="gamecard">
         <div class="gicon">💧</div>
         <div class="gtitle">Water Wise</div>
-        <p class="gblurb">A habits quiz on cutting water waste at home and around the neighbourhood.</p>
-        <div class="greward">Coming soon</div>
-        <button type="button" class="btn secondary" disabled>Coming soon</button>
+        <p class="gblurb">A fast true/false round on cutting water waste at home — answer quick for a speed bonus.</p>
+        <div class="greward">${CREDIT_CONFIG.gameRewards.waterMax} credits a round</div>
+        <button type="button" class="btn signal" data-game="water">Play</button>
       </div>
     </div>
   </section>
@@ -1951,25 +2069,38 @@ function bindLearn(){
   document.querySelectorAll('[data-game]').forEach(btn=>{
     btn.addEventListener('click', ()=>{
       if(!currentProfile()){ setView('account'); return; }
-      if(btn.dataset.game==='sort') startSortGame();
-      if(btn.dataset.game==='quiz') startQuizGame();
+      const k = btn.dataset.game;
+      if(k==='ninja') startNinjaGame();
+      if(k==='sort') startSortGame();
+      if(k==='quiz') startQuizGame();
+      if(k==='litter') startLitterGame();
+      if(k==='water') startWaterGame();
     });
   });
   document.querySelectorAll('[data-backgames]').forEach(btn=>{
-    btn.addEventListener('click', ()=>{ state.activeGame = null; render(); });
+    btn.addEventListener('click', ()=>{ stopMiniGames(); state.activeGame = null; render(); });
+  });
+  document.querySelectorAll('[data-ninja-start]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      if(state.ninjaGame) state.ninjaGame.ready = true;
+      render();
+    });
   });
   document.querySelectorAll('[data-playagain]').forEach(btn=>{
     btn.addEventListener('click', ()=>{
-      if(btn.dataset.playagain==='sort') startSortGame();
-      if(btn.dataset.playagain==='quiz') startQuizGame();
+      const k = btn.dataset.playagain;
+      if(k==='ninja') startNinjaGame();
+      if(k==='sort') startSortGame();
+      if(k==='quiz') startQuizGame();
+      if(k==='litter') startLitterGame();
+      if(k==='water') startWaterGame();
     });
   });
-  document.querySelectorAll('[data-bin]').forEach(btn=>{
-    btn.addEventListener('click', ()=> answerSort(btn.dataset.bin));
-  });
-  document.querySelectorAll('[data-qopt]').forEach(btn=>{
-    btn.addEventListener('click', ()=> answerQuiz(parseInt(btn.dataset.qopt,10)));
-  });
+  if(state.activeGame==='ninja' && state.ninjaGame && state.ninjaGame.ready) initNinjaGame();
+  if(state.activeGame==='sort') bindSort();
+  if(state.activeGame==='quiz') bindQuiz();
+  if(state.activeGame==='litter') bindLitter();
+  if(state.activeGame==='water') bindWater();
 }
 async function awardGameCredits(desc, credits){
   const p = currentProfile();
@@ -1978,12 +2109,300 @@ async function awardGameCredits(desc, credits){
   p.history.unshift({ type:'earn', desc, amount:credits, date:new Date().toISOString() });
   await persistProfiles();
 }
+function shuffle(arr){
+  for(let i=arr.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [arr[i],arr[j]]=[arr[j],arr[i]]; }
+  return arr;
+}
+function stopMiniGames(){
+  stopNinjaGame();
+  if(state.sortGame && state.sortGame.timer){ clearInterval(state.sortGame.timer); state.sortGame.timer=null; }
+  if(state.quizGame && state.quizGame.timer){ clearInterval(state.quizGame.timer); state.quizGame.timer=null; }
+  if(state.litterGame && state.litterGame.timer){ clearInterval(state.litterGame.timer); state.litterGame.timer=null; }
+  if(state.waterGame && state.waterGame.timer){ clearInterval(state.waterGame.timer); state.waterGame.timer=null; }
+}
+function stopNinjaGame(){
+  const g = state.ninjaGame;
+  if(g && typeof g.stop === 'function'){ const stop=g.stop; g.stop=null; stop(); }
+}
+
+/* ---- Trash Ninja ---- */
+function startNinjaGame(){
+  stopMiniGames();
+  state.ninjaGame = {
+    ready:false, started:false, finished:false, score:0, lives:3, combo:0,
+    correct:0, wrongTechnique:0, timeLeft:45, items:[], particles:[],
+    spawnInterval:900, raf:null, spawnTimer:null, clockTimer:null, stop:null
+  };
+  state.activeGame = 'ninja';
+  render();
+}
+function renderNinjaGame(){
+  const g = state.ninjaGame;
+  if(!g) return '';
+  if(g.finished){
+    const r = g.result || {};
+    const reasonText = r.reason==='hazard' ? 'You grabbed hazardous waste bare-handed — game over.' :
+                        r.reason==='lives' ? 'Too much trash got past you.' : "Time's up!";
+    return `
+    <div class="eyebrow">Trash Ninja — results</div>
+    <h1 style="font-size:2rem;">${reasonText}</h1>
+    <p class="lede" style="margin-top:8px;">Score ${r.score} · ${r.correct} handled correctly, ${r.wrongTechnique} handled the wrong way.</p>
+    <p class="lede">+${r.credits} credits added to your account.</p>
+    <div style="display:flex; gap:10px; margin-top:16px; flex-wrap:wrap;">
+      <button type="button" class="btn signal" data-playagain="ninja">Play again</button>
+      <button type="button" class="btn secondary" data-backgames>Back to games</button>
+    </div>`;
+  }
+  if(!g.ready){
+    return `
+    <div class="eyebrow">Trash Ninja — how to play</div>
+    <h1 style="font-size:1.9rem;">Read the rules, then start when you're ready.</h1>
+    <div class="card" style="max-width:540px; margin-top:14px;">
+      <ul class="ninja-rules-list">
+        <li><strong>Swipe</strong> through wet waste like slicing fruit.</li>
+        <li><strong>Tap</strong> dry waste once — don't swipe it.</li>
+        <li>Hazardous items are <strong>bombs</strong> — let them fly past untouched. Touch one and it's game over.</li>
+        <li>Miss a wet or dry item and you lose a life. You've got <strong>3 lives</strong> and <strong>45 seconds</strong> — chase the highest score.</li>
+      </ul>
+    </div>
+    <button type="button" class="btn signal" data-ninja-start style="margin-top:18px;">Start game</button>
+    `;
+  }
+  return `
+  <div class="eyebrow">Trash Ninja</div>
+  <h1 style="font-size:1.9rem;">Slice wet waste. Tap dry waste. Never touch the hazard.</h1>
+  <p class="hint" style="max-width:540px;"><strong>Swipe</strong> through wet waste like slicing fruit. <strong>Tap</strong> dry waste once — don't swipe it. Hazardous items are bombs: let them fly past untouched. Touch one and it's game over. Miss a wet or dry item and you lose a life.</p>
+  <div class="ninja-hud">
+    <div class="ninja-stat">Score<strong id="ninjaScore">0</strong></div>
+    <div class="ninja-lives" id="ninjaLives">❤️❤️❤️</div>
+    <div class="ninja-stat">Time<strong id="ninjaTimer">45</strong>s</div>
+    <div class="ninja-combo" id="ninjaCombo"></div>
+  </div>
+  <div class="ninja-wrap">
+    <canvas id="ninjaCanvas" class="ninja-canvas"></canvas>
+    <div class="ninja-flash" id="ninjaFlash"></div>
+  </div>
+  `;
+}
+function initNinjaGame(){
+  const g = state.ninjaGame;
+  if(!g || g.started) return;
+  const canvas = document.getElementById('ninjaCanvas');
+  if(!canvas) return;
+  g.started = true;
+  const ctx = canvas.getContext('2d');
+  const dpr = window.devicePixelRatio || 1;
+
+  function resize(){
+    const rect = canvas.getBoundingClientRect();
+    canvas.width = Math.max(1, rect.width * dpr);
+    canvas.height = Math.max(1, rect.height * dpr);
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    g.w = rect.width; g.h = rect.height;
+  }
+  resize();
+  window.addEventListener('resize', resize);
+
+  let session = null;
+  const TAP_THRESHOLD = 10;
+
+  function pos(e){
+    const rect = canvas.getBoundingClientRect();
+    const t = e.touches && e.touches[0];
+    return { x:(t?t.clientX:e.clientX) - rect.left, y:(t?t.clientY:e.clientY) - rect.top };
+  }
+  function segCircleHit(a,b,it,r){
+    const dx=b.x-a.x, dy=b.y-a.y;
+    const len2 = dx*dx+dy*dy;
+    let t = len2 ? ((it.x-a.x)*dx+(it.y-a.y)*dy)/len2 : 0;
+    t = Math.max(0,Math.min(1,t));
+    const cx = a.x+dx*t, cy = a.y+dy*t;
+    return Math.hypot(it.x-cx, it.y-cy) <= r;
+  }
+  function updateHud(){
+    const s=document.getElementById('ninjaScore'); if(s) s.textContent = g.score;
+    const l=document.getElementById('ninjaLives'); if(l) l.textContent = '❤️'.repeat(Math.max(0,g.lives)) + '🖤'.repeat(Math.max(0,3-g.lives));
+    const t=document.getElementById('ninjaTimer'); if(t) t.textContent = Math.max(0,g.timeLeft);
+  }
+  function flashCombo(n){
+    const el = document.getElementById('ninjaCombo');
+    if(!el || n<3) return;
+    el.textContent = n+'x combo!';
+    el.style.opacity='1';
+    clearTimeout(g._comboT);
+    g._comboT = setTimeout(()=>{ el.style.opacity='0'; }, 700);
+  }
+  function flashHit(){
+    const el = document.getElementById('ninjaFlash');
+    if(!el) return;
+    el.style.opacity='0.6';
+    setTimeout(()=>{ el.style.opacity='0'; }, 350);
+  }
+  function spawnBurst(x,y,color,weak){
+    for(let i=0;i<(weak?6:12);i++){
+      const a = Math.random()*Math.PI*2, sp = 1.5+Math.random()*3;
+      g.particles.push({ x,y, vx:Math.cos(a)*sp, vy:Math.sin(a)*sp, life:1, color });
+    }
+  }
+  function resolveHit(it, action){
+    if(it.dead) return;
+    it.dead = true;
+    if(it.kind==='hazard'){
+      spawnBurst(it.x, it.y, '#C4573B');
+      gameOver('hazard');
+      return;
+    }
+    const correct = (it.kind==='wet' && action==='swipe') || (it.kind==='dry' && action==='tap');
+    if(correct){
+      g.combo++;
+      g.score += 1 + Math.floor(g.combo/5);
+      g.correct++;
+      spawnBurst(it.x, it.y, it.kind==='wet' ? '#1F5A3C' : '#E8A227');
+      flashCombo(g.combo);
+    } else {
+      g.combo = 0;
+      g.score = Math.max(0, g.score-1);
+      g.wrongTechnique++;
+      spawnBurst(it.x, it.y, '#C4573B', true);
+    }
+    updateHud();
+  }
+  function checkSwipeHit(a,b){
+    g.items.forEach(it=>{ if(!it.dead && segCircleHit(a,b,it,it.r+6)) resolveHit(it,'swipe'); });
+  }
+  function checkTapHit(p){
+    let hit=null, bestD=Infinity;
+    g.items.forEach(it=>{
+      if(it.dead) return;
+      const d = Math.hypot(p.x-it.x, p.y-it.y);
+      if(d < it.r+8 && d<bestD){ bestD=d; hit=it; }
+    });
+    if(hit) resolveHit(hit,'tap');
+  }
+  function onDown(e){
+    e.preventDefault();
+    const p = pos(e);
+    session = { points:[{x:p.x,y:p.y}], totalDist:0, isSwipe:false };
+  }
+  function onMove(e){
+    if(!session) return;
+    e.preventDefault();
+    const p = pos(e);
+    const last = session.points[session.points.length-1];
+    session.totalDist += Math.hypot(p.x-last.x, p.y-last.y);
+    session.points.push({x:p.x,y:p.y});
+    if(session.points.length>16) session.points.shift();
+    if(session.totalDist > TAP_THRESHOLD){
+      session.isSwipe = true;
+      checkSwipeHit(last, p);
+    }
+  }
+  function onUp(){
+    if(!session) return;
+    if(!session.isSwipe) checkTapHit(session.points[0]);
+    session = null;
+  }
+  canvas.addEventListener('pointerdown', onDown);
+  canvas.addEventListener('pointermove', onMove);
+  window.addEventListener('pointerup', onUp);
+
+  function spawnItem(){
+    const roll = Math.random();
+    const kind = roll < 0.44 ? 'wet' : roll < 0.88 ? 'dry' : 'hazard';
+    const pool = NINJA_ITEMS.filter(p=>p.kind===kind);
+    const item = pool[Math.floor(Math.random()*pool.length)];
+    const x = 60 + Math.random()*Math.max(1,(g.w-120));
+    g.items.push({
+      x, y:g.h+40, vx:(Math.random()-0.5)*2.6, vy:-(9+Math.random()*2.2),
+      r:42, rot:Math.random()*Math.PI, vrot:(Math.random()-0.5)*0.12,
+      kind:item.kind, emoji:item.emoji, dead:false
+    });
+  }
+  function scheduleSpawn(){
+    g.spawnTimer = setTimeout(()=>{
+      if(g.finished) return;
+      spawnItem();
+      g.spawnInterval = Math.max(420, g.spawnInterval-10);
+      scheduleSpawn();
+    }, g.spawnInterval);
+  }
+
+  function loop(){
+    ctx.clearRect(0,0,g.w,g.h);
+    if(session && session.points.length>1){
+      ctx.save();
+      ctx.lineCap='round'; ctx.lineJoin='round';
+      ctx.strokeStyle='rgba(232,162,39,0.85)'; ctx.lineWidth=4;
+      ctx.beginPath();
+      session.points.forEach((p,i)=> i===0 ? ctx.moveTo(p.x,p.y) : ctx.lineTo(p.x,p.y));
+      ctx.stroke();
+      ctx.restore();
+    }
+    const gravity = 0.34;
+    g.items.forEach(it=>{
+      if(it.dead) return;
+      it.vy += gravity; it.x += it.vx; it.y += it.vy; it.rot += it.vrot;
+      ctx.save();
+      ctx.translate(it.x, it.y); ctx.rotate(it.rot);
+      ctx.font = '62px serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.fillText(it.emoji, 0, 0);
+      ctx.restore();
+      if(it.y - it.r > g.h){
+        it.dead = true;
+        if(it.kind!=='hazard'){
+          g.lives--; g.combo=0; updateHud();
+          if(g.lives<=0){ gameOver('lives'); }
+        }
+      }
+    });
+    g.items = g.items.filter(it=> !(it.dead && it.y > g.h+60));
+    g.particles.forEach(p=>{
+      p.x+=p.vx; p.y+=p.vy; p.vy+=0.12; p.life-=0.035;
+      ctx.globalAlpha = Math.max(0,p.life);
+      ctx.fillStyle = p.color;
+      ctx.beginPath(); ctx.arc(p.x,p.y,4,0,Math.PI*2); ctx.fill();
+      ctx.globalAlpha = 1;
+    });
+    g.particles = g.particles.filter(p=>p.life>0);
+    if(!g.finished) g.raf = requestAnimationFrame(loop);
+  }
+
+  function cleanup(){
+    if(g.raf) cancelAnimationFrame(g.raf);
+    clearTimeout(g.spawnTimer);
+    clearInterval(g.clockTimer);
+    window.removeEventListener('pointerup', onUp);
+    window.removeEventListener('resize', resize);
+    g.raf=null; g.spawnTimer=null; g.clockTimer=null;
+  }
+  async function gameOver(reason){
+    if(g.finished) return;
+    g.finished = true;
+    cleanup();
+    if(reason==='hazard') flashHit();
+    const target = 26;
+    let credits = Math.round(Math.max(0,Math.min(1, g.score/target)) * CREDIT_CONFIG.gameRewards.ninjaMax);
+    if(reason==='hazard') credits = Math.round(credits*0.4);
+    g.result = { score:g.score, credits, reason, correct:g.correct, wrongTechnique:g.wrongTechnique };
+    await awardGameCredits(`Trash Ninja — score ${g.score}${reason==='hazard'?' (touched hazardous waste)':''}`, credits);
+    render();
+  }
+  g.stop = cleanup;
+
+  updateHud();
+  scheduleSpawn();
+  g.clockTimer = setInterval(()=>{
+    g.timeLeft--; updateHud();
+    if(g.timeLeft<=0){ gameOver('time'); }
+  }, 1000);
+  g.raf = requestAnimationFrame(loop);
+}
 
 /* ---- Sort It Right ---- */
 function startSortGame(){
-  const pool = SORT_ITEMS.slice();
-  for(let i=pool.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [pool[i],pool[j]]=[pool[j],pool[i]]; }
-  state.sortGame = { queue: pool.slice(0,10), index:0, score:0, correct:0, finished:false, lastResult:null };
+  stopMiniGames();
+  const pool = shuffle(SORT_ITEMS.slice());
+  state.sortGame = { queue: pool.slice(0,10), index:0, score:0, correct:0, streak:0, bestStreak:0, finished:false, lastResult:null, timeLeft:5, timer:null };
   state.activeGame = 'sort';
   render();
 }
@@ -1994,18 +2413,19 @@ function renderSortGame(){
     return `
     <div class="eyebrow">Sort It Right — results</div>
     <h1 style="font-size:2rem;">You got ${g.correct} of ${g.queue.length} right.</h1>
-    <p class="lede" style="margin-top:8px;">+${g.score} credits added to your account.</p>
+    <p class="lede" style="margin-top:8px;">Best streak: ${g.bestStreak} 🔥 · +${g.score} credits added to your account.</p>
     <div style="display:flex; gap:10px; margin-top:16px; flex-wrap:wrap;">
       <button type="button" class="btn signal" data-playagain="sort">Play again</button>
       <button type="button" class="btn secondary" data-backgames>Back to games</button>
     </div>`;
   }
   const item = g.queue[g.index];
-  const fb = g.lastResult ? `<div class="banner ${g.lastResult.correct?'ok':'err'}" style="max-width:340px;">${g.lastResult.correct ? 'Correct!' : `Not quite — ${esc(g.lastResult.item.name)} is ${BIN_META[g.lastResult.correctBin].label.toLowerCase()}.`}</div>` : '';
+  const fb = g.lastResult ? `<div class="banner ${g.lastResult.correct?'ok':'err'}" style="max-width:340px;">${g.lastResult.correct ? (g.lastResult.streak>=3?`Correct! ${g.lastResult.streak}x streak 🔥`:'Correct!') : (g.lastResult.timedOut ? `Too slow — ${esc(g.lastResult.item.name)} is ${BIN_META[g.lastResult.correctBin].label.toLowerCase()}.` : `Not quite — ${esc(g.lastResult.item.name)} is ${BIN_META[g.lastResult.correctBin].label.toLowerCase()}.`)}</div>` : '';
   return `
   <div class="eyebrow">Sort It Right — item ${g.index+1} of ${g.queue.length}</div>
   <h1 style="font-size:1.9rem;">Where does this go?</h1>
-  <p class="hint">${CREDIT_CONFIG.gameRewards.sortMax} credits for finishing the round · ${g.correct} correct so far</p>
+  <p class="hint">Streak ${g.streak}${g.streak>=3?' 🔥':''} · ${g.correct} correct so far</p>
+  <div class="timerbar"><div class="timerfill" id="sortTimerFill" style="width:${(g.timeLeft/5)*100}%;"></div></div>
   ${fb}
   <div class="itemcard">
     <div class="em">${item.emoji}</div>
@@ -2018,27 +2438,59 @@ function renderSortGame(){
   </div>
   `;
 }
+function bindSort(){
+  const g = state.sortGame;
+  if(!g || g.finished) return;
+  if(!g.timer){
+    g.timer = setInterval(()=>{
+      g.timeLeft--;
+      const el = document.getElementById('sortTimerFill');
+      if(el) el.style.width = Math.max(0,(g.timeLeft/5)*100)+'%';
+      if(g.timeLeft<=0){ sortTimeout(); }
+    }, 1000);
+  }
+  document.querySelectorAll('[data-bin]').forEach(btn=>{
+    btn.addEventListener('click', ()=> answerSort(btn.dataset.bin));
+  });
+}
+async function finishSortRound(){
+  const g = state.sortGame;
+  g.finished = true;
+  g.score = Math.min(CREDIT_CONFIG.gameRewards.sortMax, g.score);
+  await awardGameCredits(`Sort It Right — ${g.correct}/${g.queue.length} correct`, g.score);
+}
 async function answerSort(binId){
   const g = state.sortGame;
   if(!g || g.finished) return;
+  clearInterval(g.timer); g.timer=null;
   const item = g.queue[g.index];
   const correct = item.bin === binId;
-  if(correct){ g.correct++; }
-  g.lastResult = { correct, correctBin:item.bin, item };
+  if(correct){ g.correct++; g.streak++; g.bestStreak=Math.max(g.bestStreak,g.streak); g.score += g.streak>=6?3:g.streak>=3?2:1; }
+  else { g.streak=0; }
+  g.lastResult = { correct, correctBin:item.bin, item, streak:g.streak };
   g.index++;
-  if(g.index >= g.queue.length){
-    g.finished = true;
-    g.score = CREDIT_CONFIG.gameRewards.sortMax;
-    await awardGameCredits(`Sort It Right — ${g.correct}/${g.queue.length} correct`, g.score);
-  }
+  g.timeLeft = 5;
+  if(g.index >= g.queue.length){ await finishSortRound(); }
+  render();
+}
+async function sortTimeout(){
+  const g = state.sortGame;
+  if(!g || g.finished) return;
+  clearInterval(g.timer); g.timer=null;
+  const item = g.queue[g.index];
+  g.streak = 0;
+  g.lastResult = { correct:false, correctBin:item.bin, item, timedOut:true };
+  g.index++;
+  g.timeLeft = 5;
+  if(g.index >= g.queue.length){ await finishSortRound(); }
   render();
 }
 
 /* ---- Waste Wise Quiz ---- */
 function startQuizGame(){
-  const qs = QUIZ_QUESTIONS.slice();
-  for(let i=qs.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [qs[i],qs[j]]=[qs[j],qs[i]]; }
-  state.quizGame = { questions: qs, index:0, score:0, correct:0, finished:false, lastResult:null };
+  stopMiniGames();
+  const qs = shuffle(QUIZ_QUESTIONS.slice());
+  state.quizGame = { questions: qs, index:0, score:0, correct:0, streak:0, bestStreak:0, finished:false, lastResult:null, timeLeft:8, timer:null };
   state.activeGame = 'quiz';
   render();
 }
@@ -2049,37 +2501,193 @@ function renderQuizGame(){
     return `
     <div class="eyebrow">Waste Wise Quiz — results</div>
     <h1 style="font-size:2rem;">You got ${g.correct} of ${g.questions.length} right.</h1>
-    <p class="lede" style="margin-top:8px;">+${g.score} credits added to your account.</p>
+    <p class="lede" style="margin-top:8px;">Best streak: ${g.bestStreak} 🔥 · +${g.score} credits added to your account.</p>
     <div style="display:flex; gap:10px; margin-top:16px; flex-wrap:wrap;">
       <button type="button" class="btn signal" data-playagain="quiz">Play again</button>
       <button type="button" class="btn secondary" data-backgames>Back to games</button>
     </div>`;
   }
   const q = g.questions[g.index];
-  const fb = g.lastResult ? `<div class="banner ${g.lastResult.correct?'ok':'err'}" style="max-width:460px;">${g.lastResult.correct ? 'Correct!' : `Not quite — the answer was "${esc(g.lastResult.correctText)}".`}</div>` : '';
+  const fb = g.lastResult ? `<div class="banner ${g.lastResult.correct?'ok':'err'}" style="max-width:460px;">${g.lastResult.correct ? (g.lastResult.streak>=3?`Correct! ${g.lastResult.streak}x streak 🔥`:'Correct!') : `Not quite — the answer was "${esc(g.lastResult.correctText)}".`}</div>` : '';
   return `
   <div class="eyebrow">Waste Wise Quiz — question ${g.index+1} of ${g.questions.length}</div>
   <h1 style="font-size:1.7rem;">${esc(q.q)}</h1>
-  <p class="hint">${CREDIT_CONFIG.gameRewards.quizMax} credits for finishing the round · ${g.correct} correct so far</p>
+  <p class="hint">Streak ${g.streak}${g.streak>=3?' 🔥':''} · ${g.correct} correct so far</p>
+  <div class="timerbar"><div class="timerfill" id="quizTimerFill" style="width:${(g.timeLeft/8)*100}%;"></div></div>
   ${fb}
   <div style="max-width:460px; margin-top:14px;">
     ${q.options.map((opt,i)=>`<button type="button" class="quizopt" data-qopt="${i}">${esc(opt)}</button>`).join('')}
   </div>
   `;
 }
+function bindQuiz(){
+  const g = state.quizGame;
+  if(!g || g.finished) return;
+  if(!g.timer){
+    g.timer = setInterval(()=>{
+      g.timeLeft--;
+      const el = document.getElementById('quizTimerFill');
+      if(el) el.style.width = Math.max(0,(g.timeLeft/8)*100)+'%';
+      if(g.timeLeft<=0){ answerQuiz(-1); }
+    }, 1000);
+  }
+  document.querySelectorAll('[data-qopt]').forEach(btn=>{
+    btn.addEventListener('click', ()=> answerQuiz(parseInt(btn.dataset.qopt,10)));
+  });
+}
 async function answerQuiz(optIdx){
   const g = state.quizGame;
   if(!g || g.finished) return;
+  clearInterval(g.timer); g.timer=null;
   const q = g.questions[g.index];
   const correct = optIdx === q.answer;
-  if(correct){ g.correct++; }
-  g.lastResult = { correct, correctText: q.options[q.answer] };
+  if(correct){ g.correct++; g.streak++; g.bestStreak=Math.max(g.bestStreak,g.streak); g.score += g.streak>=6?3:g.streak>=3?2:1; }
+  else { g.streak=0; }
+  g.lastResult = { correct, correctText: q.options[q.answer], streak:g.streak };
   g.index++;
+  g.timeLeft = 8;
   if(g.index >= g.questions.length){
     g.finished = true;
-    g.score = CREDIT_CONFIG.gameRewards.quizMax;
+    g.score = Math.min(CREDIT_CONFIG.gameRewards.quizMax, g.score);
     await awardGameCredits(`Waste Wise Quiz — ${g.correct}/${g.questions.length} correct`, g.score);
   }
+  render();
+}
+
+/* ---- Water Wise (speed round) ---- */
+function startWaterGame(){
+  stopMiniGames();
+  const qs = shuffle(WATER_QUESTIONS.slice());
+  state.waterGame = { questions: qs, index:0, score:0, correct:0, finished:false, lastResult:null, timeLeft:10, timer:null };
+  state.activeGame = 'water';
+  render();
+}
+function renderWaterGame(){
+  const g = state.waterGame;
+  if(!g) return '';
+  if(g.finished){
+    return `
+    <div class="eyebrow">Water Wise — results</div>
+    <h1 style="font-size:2rem;">You got ${g.correct} of ${g.questions.length} right.</h1>
+    <p class="lede" style="margin-top:8px;">+${g.score} credits added to your account.</p>
+    <div style="display:flex; gap:10px; margin-top:16px; flex-wrap:wrap;">
+      <button type="button" class="btn signal" data-playagain="water">Play again</button>
+      <button type="button" class="btn secondary" data-backgames>Back to games</button>
+    </div>`;
+  }
+  const q = g.questions[g.index];
+  const fb = g.lastResult ? `<div class="banner ${g.lastResult.correct?'ok':'err'}" style="max-width:460px;">${g.lastResult.correct ? (g.lastResult.speedBonus?'Correct! Speed bonus ⚡':'Correct!') : `Not quite — the answer was "${esc(g.lastResult.correctText)}".`}</div>` : '';
+  return `
+  <div class="eyebrow">Water Wise — question ${g.index+1} of ${g.questions.length}</div>
+  <h1 style="font-size:1.7rem;">${esc(q.q)}</h1>
+  <p class="hint">${g.correct} correct so far · answer within <strong id="waterTimer">${g.timeLeft}</strong>s for a speed bonus</p>
+  <div class="timerbar"><div class="timerfill" id="waterTimerFill" style="width:${(g.timeLeft/10)*100}%;"></div></div>
+  ${fb}
+  <div style="max-width:460px; margin-top:14px;">
+    ${q.options.map((opt,i)=>`<button type="button" class="quizopt" data-wateropt="${i}">${esc(opt)}</button>`).join('')}
+  </div>
+  `;
+}
+function bindWater(){
+  const g = state.waterGame;
+  if(!g || g.finished) return;
+  if(!g.timer){
+    g.timer = setInterval(()=>{
+      g.timeLeft--;
+      const t = document.getElementById('waterTimer'); if(t) t.textContent = g.timeLeft;
+      const el = document.getElementById('waterTimerFill'); if(el) el.style.width = Math.max(0,(g.timeLeft/10)*100)+'%';
+      if(g.timeLeft<=0){ answerWater(-1); }
+    }, 1000);
+  }
+  document.querySelectorAll('[data-wateropt]').forEach(btn=>{
+    btn.addEventListener('click', ()=> answerWater(parseInt(btn.dataset.wateropt,10)));
+  });
+}
+async function answerWater(optIdx){
+  const g = state.waterGame;
+  if(!g || g.finished) return;
+  clearInterval(g.timer); g.timer=null;
+  const q = g.questions[g.index];
+  const correct = optIdx === q.answer;
+  const speedBonus = correct && g.timeLeft>5;
+  if(correct){ g.correct++; g.score += speedBonus ? 2 : 1; }
+  g.lastResult = { correct, correctText: q.options[q.answer], speedBonus };
+  g.index++;
+  g.timeLeft = 10;
+  if(g.index >= g.questions.length){
+    g.finished = true;
+    g.score = Math.min(CREDIT_CONFIG.gameRewards.waterMax, g.score);
+    await awardGameCredits(`Water Wise — ${g.correct}/${g.questions.length} correct`, g.score);
+  }
+  render();
+}
+
+/* ---- Litter Patrol ---- */
+function startLitterGame(){
+  stopMiniGames();
+  const scene = LITTER_SCENES[Math.floor(Math.random()*LITTER_SCENES.length)];
+  const spots = scene.spots.map((s,i)=>({ ...s, id:'sp'+i, found:false }));
+  state.litterGame = { scene, spots, timeLeft:30, found:0, wrong:0, finished:false, credits:0, timer:null };
+  state.activeGame = 'litter';
+  render();
+}
+function renderLitterGame(){
+  const g = state.litterGame;
+  if(!g) return '';
+  const total = g.spots.filter(s=>s.litter).length;
+  if(g.finished){
+    return `
+    <div class="eyebrow">Litter Patrol — results</div>
+    <h1 style="font-size:2rem;">You spotted ${g.found} of ${total} litter items.</h1>
+    <p class="lede" style="margin-top:8px;">${g.wrong} wrong click${g.wrong===1?'':'s'} on things that weren't litter.</p>
+    <p class="lede">+${g.credits} credits added to your account.</p>
+    <div style="display:flex; gap:10px; margin-top:16px; flex-wrap:wrap;">
+      <button type="button" class="btn signal" data-playagain="litter">Play again</button>
+      <button type="button" class="btn secondary" data-backgames>Back to games</button>
+    </div>`;
+  }
+  return `
+  <div class="eyebrow">Litter Patrol — ${esc(g.scene.name)}</div>
+  <h1 style="font-size:1.9rem;">Spot the litter before the clock runs out.</h1>
+  <p class="hint">Click only actual litter — leave the trees, benches and wildlife alone. ${g.found}/${total} found · ${g.timeLeft}s left</p>
+  <div class="litter-scene litter-theme-${g.scene.theme}" id="litterScene">
+    ${g.spots.map(s=>`<button type="button" class="litter-spot ${s.found?'found':''}" data-litter-spot="${s.id}" style="left:${s.left}%; top:${s.top}%;" aria-label="tap">${s.emoji}</button>`).join('')}
+  </div>
+  `;
+}
+function bindLitter(){
+  const g = state.litterGame;
+  if(!g || g.finished) return;
+  if(!g.timer){
+    g.timer = setInterval(()=>{
+      g.timeLeft--;
+      if(g.timeLeft<=0){ finishLitterGame(); return; }
+      render();
+    }, 1000);
+  }
+  document.querySelectorAll('[data-litter-spot]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const s = g.spots.find(x=>x.id===btn.dataset.litterSpot);
+      if(!s || s.found) return;
+      s.found = true;
+      if(s.litter) g.found++; else g.wrong++;
+      const total = g.spots.filter(x=>x.litter).length;
+      if(g.found>=total){ finishLitterGame(); return; }
+      render();
+    });
+  });
+}
+async function finishLitterGame(){
+  const g = state.litterGame;
+  if(!g || g.finished) return;
+  clearInterval(g.timer); g.timer=null;
+  g.finished = true;
+  const total = g.spots.filter(s=>s.litter).length;
+  const accuracy = total ? g.found/total : 0;
+  const penalty = Math.min(0.6, g.wrong*0.08);
+  const ratio = Math.max(0, accuracy - penalty);
+  g.credits = Math.round(ratio * CREDIT_CONFIG.gameRewards.litterMax);
+  await awardGameCredits(`Litter Patrol — ${g.found}/${total} spotted`, g.credits);
   render();
 }
 
