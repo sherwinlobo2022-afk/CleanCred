@@ -593,12 +593,12 @@ const DEFAULT_SPOTS = [
   { id:'s5', name:"St Joseph Engineering College, Vamanjoor", lat:12.9103, lng:74.8983, radius:120, source:'seed' }
 ];
 const DEFAULT_BUSINESSES = [
-  { id:'b1', name:'Green Leaf Cafe', cat:'Food & drink', emoji:'☕', offer:'Free filter coffee with any snack', cost:40 },
-  { id:'b2', name:'Coastal Cycles', cat:'Retail', emoji:'🚲', offer:'10% off bike servicing', cost:60 },
-  { id:'b3', name:'Bloom Grocers', cat:'Groceries', emoji:'🥬', offer:'₹50 off a ₹300+ bill', cost:50 },
-  { id:'b4', name:'Sunder Laundry', cat:'Services', emoji:'🧺', offer:'One free wash & fold load', cost:75 },
-  { id:'b5', name:'Pageturner Books', cat:'Retail', emoji:'📚', offer:'₹100 off any paperback', cost:100 },
-  { id:'b6', name:'FitBox Gym', cat:'Fitness', emoji:'🏋️', offer:'One free guest session', cost:100 }
+  { id:'b1', name:'Green Leaf Cafe', cat:'Food & drink', emoji:'☕', offer:'Free filter coffee with any snack', cost:400 },
+  { id:'b2', name:'Coastal Cycles', cat:'Retail', emoji:'🚲', offer:'10% off bike servicing', cost:600 },
+  { id:'b3', name:'Bloom Grocers', cat:'Groceries', emoji:'🥬', offer:'₹50 off a ₹300+ bill', cost:500 },
+  { id:'b4', name:'Sunder Laundry', cat:'Services', emoji:'🧺', offer:'One free wash & fold load', cost:750 },
+  { id:'b5', name:'Pageturner Books', cat:'Retail', emoji:'📚', offer:'₹100 off any paperback', cost:1000 },
+  { id:'b6', name:'FitBox Gym', cat:'Fitness', emoji:'🏋️', offer:'One free guest session', cost:1000 }
 ];
 const DEFAULT_EVENTS = [
   { id:'e1', title:'Kadri Hill sapling drive', location:'Kadri Park, Mangaluru', lat:12.8990, lng:74.8480, radius:150,
@@ -690,11 +690,9 @@ const QUIZ_QUESTIONS = [
   { q:"Why does sorting waste at home actually matter?", options:['It makes recycling and composting far more effective','It has no effect once collected','It only matters for hazardous items'], answer:0 }
 ];
 const CREDIT_CONFIG = {
-  // Store value: 1 CleanCred credit = ₹1 of stated coupon value.
-  creditValueINR: 1,
   gameRewards: {
-    sortMax: 30,
-    quizMax: 32
+    sortMax: 10,
+    quizMax: 10
   }
 };
 
@@ -1329,7 +1327,7 @@ async function submitDrop(){
   const r = state.record;
   const isManual = !r.verifiedSpot && !!r.manualSpot;
   const spotName = isManual ? r.manualSpot.name : r.verifiedSpot.name;
-  const earned = 8 + Math.floor(Math.random()*8); // 8-15 credits
+  const earned = 15 + Math.floor(Math.random()*16); // 15-30 credits
   const area = document.getElementById('camArea');
   if(isManual){
     // Manual entries aren't GPS-checked, so hold the credit until it's reviewed
@@ -1709,14 +1707,14 @@ function learnHub(){
         <div class="gicon">🗑️</div>
         <div class="gtitle">Sort It Right</div>
         <p class="gblurb">Ten items, one at a time. Drop each into wet, dry or hazardous before you second-guess yourself.</p>
-        <div class="greward">Up to ${CREDIT_CONFIG.gameRewards.sortMax} credits a round</div>
+        <div class="greward">${CREDIT_CONFIG.gameRewards.sortMax} credits a round</div>
         <button type="button" class="btn signal" data-game="sort">Play</button>
       </div>
       <div class="gamecard">
         <div class="gicon">🧠</div>
         <div class="gtitle">Waste Wise Quiz</div>
         <p class="gblurb">Eight quick questions on segregation, composting and recycling myths.</p>
-        <div class="greward">Up to ${CREDIT_CONFIG.gameRewards.quizMax} credits a round</div>
+        <div class="greward">${CREDIT_CONFIG.gameRewards.quizMax} credits a round</div>
         <button type="button" class="btn signal" data-game="quiz">Play</button>
       </div>
       <div class="gamecard soon">
@@ -1795,7 +1793,7 @@ function renderSortGame(){
   return `
   <div class="eyebrow">Sort It Right — item ${g.index+1} of ${g.queue.length}</div>
   <h1 style="font-size:1.9rem;">Where does this go?</h1>
-  <p class="hint">3 credits per correct sort · ${g.score} earned so far</p>
+  <p class="hint">${CREDIT_CONFIG.gameRewards.sortMax} credits for finishing the round · ${g.correct} correct so far</p>
   ${fb}
   <div class="itemcard">
     <div class="em">${item.emoji}</div>
@@ -1813,11 +1811,12 @@ async function answerSort(binId){
   if(!g || g.finished) return;
   const item = g.queue[g.index];
   const correct = item.bin === binId;
-  if(correct){ g.score += 3; g.correct++; }
+  if(correct){ g.correct++; }
   g.lastResult = { correct, correctBin:item.bin, item };
   g.index++;
   if(g.index >= g.queue.length){
     g.finished = true;
+    g.score = CREDIT_CONFIG.gameRewards.sortMax;
     await awardGameCredits(`Sort It Right — ${g.correct}/${g.queue.length} correct`, g.score);
   }
   render();
@@ -1849,7 +1848,7 @@ function renderQuizGame(){
   return `
   <div class="eyebrow">Waste Wise Quiz — question ${g.index+1} of ${g.questions.length}</div>
   <h1 style="font-size:1.7rem;">${esc(q.q)}</h1>
-  <p class="hint">4 credits per correct answer · ${g.score} earned so far</p>
+  <p class="hint">${CREDIT_CONFIG.gameRewards.quizMax} credits for finishing the round · ${g.correct} correct so far</p>
   ${fb}
   <div style="max-width:460px; margin-top:14px;">
     ${q.options.map((opt,i)=>`<button type="button" class="quizopt" data-qopt="${i}">${esc(opt)}</button>`).join('')}
@@ -1861,11 +1860,12 @@ async function answerQuiz(optIdx){
   if(!g || g.finished) return;
   const q = g.questions[g.index];
   const correct = optIdx === q.answer;
-  if(correct){ g.score += 4; g.correct++; }
+  if(correct){ g.correct++; }
   g.lastResult = { correct, correctText: q.options[q.answer] };
   g.index++;
   if(g.index >= g.questions.length){
     g.finished = true;
+    g.score = CREDIT_CONFIG.gameRewards.quizMax;
     await awardGameCredits(`Waste Wise Quiz — ${g.correct}/${g.questions.length} correct`, g.score);
   }
   render();
@@ -2677,7 +2677,7 @@ function viewBusinesses(){
   <section class="section">
     <div class="eyebrow">Redeem credits</div>
     <h1 style="font-size:2.2rem;">Spend where it counts</h1>
-    <p class="lede" style="margin-top:10px; max-width:600px;">These local businesses partner with CleanCred to turn your credits into real coupons. <strong>1 credit = ₹${CREDIT_CONFIG.creditValueINR}</strong> of stated store value.</p>
+    <p class="lede" style="margin-top:10px; max-width:600px;">These local businesses partner with CleanCred to turn your credits into real coupons.</p>
     ${p ? `<div class="banner ok" style="max-width:400px;">You have <strong>${p.credits} credits</strong> to spend.</div>` : `<div class="banner warn" style="max-width:420px;">Log in on the "My account" page to redeem credits.</div>`}
     <div class="bizgrid">
       ${state.businesses.map(b=>`
