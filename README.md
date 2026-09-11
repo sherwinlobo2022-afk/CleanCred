@@ -2,9 +2,9 @@
 
 ## Team
 
-- Sherwin Lobo (@YOUR_GITHUB_USERNAME)
-- Team Member 2 (@USERNAME)
-- Team Member 3 (@USERNAME)
+- Sherwin Lobo (@Team Leader -Tech)
+- Neil Shawn Lobo(Tech)
+- Riyan  (Tech)
 
 ## What it does
 
