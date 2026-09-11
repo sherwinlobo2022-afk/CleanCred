@@ -4,7 +4,9 @@
 
 - Sherwin Lobo (@Team Leader -Tech)
 - Neil Shawn Lobo(Tech)
-- Riyan  (Tech)
+- Riyan Hadrin Monteiro(Non Tech)
+- Nikolai Vitus Dsouza(Non Tech)
+- Sheron Lisa Dsouza(Media)
 
 ## What it does
 
