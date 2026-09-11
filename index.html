@@ -98,6 +98,20 @@
   }
   .navlink small{font-weight:400; color:rgba(255,255,255,0.55); font-size:0.78rem;}
   .navlink:hover{background:rgba(255,255,255,0.06); border-left-color:var(--signal);}
+  .navgroup{display:flex; flex-direction:column;}
+  .navgroup-toggle{
+    text-align:left; background:none; border:none; color:rgba(255,255,255,0.85);
+    padding:12px 10px; font-size:1.02rem; font-weight:600; cursor:pointer;
+    border-left:3px solid transparent; display:flex; flex-direction:column; gap:2px; width:100%;
+  }
+  .navgroup-toggle small{font-weight:400; color:rgba(255,255,255,0.55); font-size:0.78rem;}
+  .navgroup-toggle:hover{background:rgba(255,255,255,0.06); border-left-color:var(--signal);}
+  .navgroup-toggle .caret{transition:transform 0.15s ease;}
+  .navgroup.open .navgroup-toggle .caret{transform:rotate(90deg);}
+  .navgroup-toggle .caretrow{display:flex; align-items:center; justify-content:space-between; width:100%;}
+  .navgroup-children{display:none; flex-direction:column; padding-left:14px; border-left:1px solid rgba(255,255,255,0.15); margin-left:10px;}
+  .navgroup.open .navgroup-children{display:flex;}
+  .navgroup.open .navgroup-toggle{color:var(--white); background:rgba(255,255,255,0.06);}
   .navlink.active{border-left-color:var(--signal); color:var(--white); background:rgba(255,255,255,0.08);}
 
   main{flex:1; width:100%;}
@@ -268,6 +282,14 @@
   .itemcard .em{font-size:3.2rem; line-height:1;}
   .itemcard .nm{font-weight:700; font-size:1.15rem; margin-top:10px; color:var(--forest-dark);}
   .binrow{display:grid; grid-template-columns:repeat(3,1fr); gap:10px; max-width:520px; margin-top:16px;}
+  .modecard{background:var(--white); border:2px solid var(--line); border-radius:var(--radius); padding:22px; display:flex; flex-direction:column; gap:8px; text-align:left; cursor:pointer; font-family:inherit;}
+  .modecard:hover{border-color:var(--signal-dark);}
+  .modecard .gicon{font-size:2rem;}
+  .modecard .gtitle{font-weight:700; font-size:1.1rem; color:var(--forest-dark);}
+  .modecard .gblurb{font-size:0.88rem; color:var(--ink-soft);}
+  .modecard .greward{font-weight:700; font-size:0.8rem; color:var(--forest);}
+  .modecard.report .greward{color:var(--clay);}
+  .backlink{background:none; border:none; padding:0; color:var(--ink-soft); font-weight:600; font-size:0.85rem; cursor:pointer; text-decoration:underline;}
   .binbtn{border:2px solid var(--line); background:var(--white); border-radius:var(--radius); padding:16px 6px; cursor:pointer; text-align:center; font-weight:700; display:flex; flex-direction:column; gap:3px; color:var(--ink);}
   .binbtn small{font-weight:400; color:var(--ink-soft); font-size:0.74rem;}
   .binbtn.wet{border-color:var(--forest);}
@@ -573,7 +595,7 @@ const state = {
   leaderboard: {},               // shared: mobileNumber -> {id, name, homeState, credits}
   lbSelectedState: '',           // which state the leaderboard picker currently shows
   lbTab: 'people',              // people | colleges
-  record: { verifiedSpot:null, manualSpot:null, stream:null, recorder:null, chunks:[], blobUrl:null, recording:false },
+  record: { mode:null, verifiedSpot:null, manualSpot:null, reportLocation:null, reportNote:'', stream:null, recorder:null, chunks:[], blobUrl:null, recording:false },
   plantCapture: { eventId:null, verifiedEvent:null, stream:null, recorder:null, chunks:[], blobUrl:null, recording:false },
   idcardCapture: { stream:null, photoData:null },
   loginFlow: { mobile:'', stage:'mobile' }, // stage: 'mobile' (enter number) | 'signup' (new number, create digital ID)
@@ -614,17 +636,23 @@ const DEFAULT_EVENTS = [
 
 const NAV = [
   { id:'mission', label:'Our mission', sub:'Why CleanCred exists' },
-  { id:'record', label:'Record & earn', sub:'Log a verified drop' },
+  { id:'activities', label:'User activities', sub:'Record, learn & watch to earn', group:[
+      { id:'record', label:'Record & earn', sub:'Log a verified drop' },
+      { id:'learn', label:'Learn & play', sub:'Games that teach sorting' },
+      { id:'watch', label:'Watch & earn', sub:'Videos on clean habits' }
+    ]
+  },
   { id:'plant', label:'Upcoming events', sub:'Plantation drives from municipal & NGO partners' },
-  { id:'learn', label:'Learn & play', sub:'Games that teach sorting' },
-  { id:'watch', label:'Watch & earn', sub:'Videos on clean habits' },
   { id:'leaderboard', label:'Leaderboard', sub:'National & state rankings' },
   { id:'account', label:'Account & Digital ID', sub:'Log in, register or view your member card' },
   { id:'request-spot', label:'Request a spot', sub:'Add a dumping point' },
   { id:'businesses', label:'Credit store', sub:'See what your credits are worth' },
-  { id:'partner', label:'Partner with us', sub:'For businesses offering rewards' },
-  { id:'ads', label:'Advertise with us', sub:'Register to buy website ads' },
-  { id:'donate', label:'Support us', sub:'Keep it running' },
+  { id:'support', label:'Support', sub:'Help keep CleanCred going', group:[
+      { id:'donate', label:'Support us', sub:'Keep it running' },
+      { id:'partner', label:'Partner with us', sub:'For businesses offering rewards' },
+      { id:'ads', label:'Advertise with us', sub:'Register to buy website ads' }
+    ]
+  },
   { id:'authority', label:'Municipal / NGO portal', sub:'Restricted operations dashboard' }
 ];
 
@@ -917,16 +945,41 @@ async function init(){
 
 function buildNav(){
   const wrap = document.getElementById('navPanelInner');
-  wrap.innerHTML = NAV.map(n => `
-    <button type="button" class="navlink" data-view="${n.id}">
-      ${esc(n.label)}
-      <small>${esc(n.sub)}</small>
-    </button>
-  `).join('');
+  wrap.innerHTML = NAV.map(n => {
+    if(n.group){
+      return `
+        <div class="navgroup" id="navGroup-${n.id}">
+          <button type="button" class="navgroup-toggle" data-group="${n.id}">
+            <span class="caretrow"><span>${esc(n.label)}</span><span class="caret">›</span></span>
+            <small>${esc(n.sub)}</small>
+          </button>
+          <div class="navgroup-children">
+            ${n.group.map(c => `
+              <button type="button" class="navlink" data-view="${c.id}">
+                ${esc(c.label)}
+                <small>${esc(c.sub)}</small>
+              </button>
+            `).join('')}
+          </div>
+        </div>
+      `;
+    }
+    return `
+      <button type="button" class="navlink" data-view="${n.id}">
+        ${esc(n.label)}
+        <small>${esc(n.sub)}</small>
+      </button>
+    `;
+  }).join('');
   wrap.querySelectorAll('.navlink').forEach(btn=>{
     btn.addEventListener('click', ()=>{
       setView(btn.dataset.view);
       closeNav();
+    });
+  });
+  wrap.querySelectorAll('.navgroup-toggle').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      document.getElementById('navGroup-' + btn.dataset.group).classList.toggle('open');
     });
   });
 }
@@ -968,6 +1021,9 @@ document.getElementById('logoBtn').addEventListener('click', ()=> { setView('mis
 function render(){
   document.querySelectorAll('.navlink').forEach(b=>{
     b.classList.toggle('active', b.dataset.view === state.view);
+  });
+  document.querySelectorAll('.navgroup').forEach(g=>{
+    if(g.querySelector('.navlink.active')) g.classList.add('open');
   });
   const c = document.getElementById('content');
   const views = {
@@ -1033,7 +1089,7 @@ function viewMission(){
       </div>
       <div class="step">
         <div class="stepnum">03</div>
-        <div><strong>Report illegal dumping.</strong><p class="hint" style="margin-top:6px;">Spot someone throwing garbage illegally? Report it in the app and earn credits for flagging it — you don't need to be at a verified spot to do this.</p></div>
+        <div><strong>Report illegal dumping.</strong><p class="hint" style="margin-top:6px;">Spot someone throwing garbage illegally? Capture your live location and film it — you don't need to be at a verified spot to do this. The clip goes straight to your municipal corporation, and credits land only once they accept it for cleanup.</p></div>
       </div>
       <div class="step">
         <div class="stepnum">04</div>
@@ -1105,9 +1161,39 @@ function viewRecord(){
     </section>`;
   }
   const r = state.record;
+
+  if(!r.mode){
+    return `
+    <section class="section wrap narrow" style="padding:0;">
+      <div class="eyebrow">Record & earn</div>
+      <h1 style="font-size:2.2rem;">What are you here to do?</h1>
+      <p class="lede" style="margin-top:10px; max-width:600px;">Both options run on your live camera and live location, on-device — there's never a way to upload a photo or clip from your gallery.</p>
+      <div class="gamegrid" style="margin-top:22px;">
+        <button type="button" class="modecard dispose" data-record-mode="dispose">
+          <div class="gicon">🗑️</div>
+          <div class="gtitle">Throw trash in a bin</div>
+          <p class="gblurb">Stand at a verified dumpster or bin, film yourself dropping trash in, and get credits right away.</p>
+          <div class="greward">Instant credits</div>
+        </button>
+        <button type="button" class="modecard report" data-record-mode="report">
+          <div class="gicon">🚨</div>
+          <div class="gtitle">Report illegal dumping</div>
+          <p class="gblurb">Spot someone dumping trash illegally? Capture your live location and film it. It goes straight to your municipal corporation for review.</p>
+          <div class="greward">Credits after municipal approval</div>
+        </button>
+      </div>
+    </section>`;
+  }
+
+  if(r.mode==='report') return viewRecordReport(r);
+  return viewRecordDispose(r);
+}
+
+function viewRecordDispose(r){
   return `
   <section class="section">
-    <div class="eyebrow">Step 1 of 2</div>
+    <button type="button" class="backlink" data-record-back="1">&larr; Choose a different option</button>
+    <div class="eyebrow" style="margin-top:14px;">Step 1 of 2 · Throw trash in a bin</div>
     <h1 style="font-size:2.2rem;">Confirm you're at a valid spot</h1>
     <p class="lede" style="margin-top:10px; max-width:600px;">We check your device's live location against CleanCred's list of verified dumping spots. This runs on-device — nothing is guessed or typed in.</p>
     ${mediaEnvWarningBanner()}
@@ -1141,11 +1227,55 @@ function viewRecord(){
   </section>
   `;
 }
+
+function viewRecordReport(r){
+  return `
+  <section class="section">
+    <button type="button" class="backlink" data-record-back="1">&larr; Choose a different option</button>
+    <div class="eyebrow" style="margin-top:14px;">Step 1 of 3 · Report illegal dumping</div>
+    <h1 style="font-size:2.2rem;">Capture your live location</h1>
+    <p class="lede" style="margin-top:10px; max-width:600px;">We read your device's live GPS position on-device the moment you tap the button below — there's no typing a location in for this flow, so the report can't be faked or filed for somewhere you aren't.</p>
+    ${mediaEnvWarningBanner()}
+    <div id="locBanner">${r.reportLocation ? bannerReportLocation(r.reportLocation) : ''}</div>
+    <button type="button" class="btn ${r.reportLocation?'secondary':'signal'}" id="checkReportLocBtn" style="margin-top:6px;">${r.reportLocation ? 'Re-check location' : 'Capture my location'}</button>
+  </section>
+
+  <hr class="rule">
+
+  <section class="section">
+    <div class="eyebrow">Step 2 of 3</div>
+    <h1 style="font-size:2.2rem;">What's happening?</h1>
+    <p class="lede" style="margin-top:10px; max-width:600px;">Optional, but a short note helps your municipal corporation act faster.</p>
+    <div class="field" style="max-width:600px;">
+      <label for="reportNoteInput">Note for the municipal corporation</label>
+      <input id="reportNoteInput" placeholder="e.g. Truck dumping construction waste by the culvert" value="${esc(r.reportNote||'')}">
+    </div>
+  </section>
+
+  <hr class="rule">
+
+  <section class="section">
+    <div class="eyebrow">Step 3 of 3</div>
+    <h1 style="font-size:2.2rem;">Film it, live</h1>
+    <p class="lede" style="margin-top:10px; max-width:600px;">${r.reportLocation ? 'Recording happens right here — there is no option to upload a file from your gallery. The clip is sent to your municipal corporation, not posted publicly.' : 'Capture your location above to unlock the camera.'}</p>
+
+    <div id="camArea" style="margin-top:16px;"></div>
+  </section>
+  `;
+}
+function recordLocationReady(){
+  const r = state.record;
+  if(r.mode==='report') return !!r.reportLocation;
+  return !!(r.verifiedSpot || r.manualSpot);
+}
 function bannerVerified(spot){
   return `<div class="banner ok"><strong>Location verified</strong> — you're at <strong>${esc(spot.name)}</strong> (${Math.round(spot.dist)} m away). You're clear to record.</div>`;
 }
 function bannerManual(spot){
   return `<div class="banner warn"><strong>Location entered manually:</strong> ${esc(spot.name)}. You can record now, but this drop is flagged for manual review before credits are added.</div>`;
+}
+function bannerReportLocation(loc){
+  return `<div class="banner ok"><strong>Location captured</strong> — approx. ${loc.lat.toFixed(4)}, ${loc.lng.toFixed(4)}. This is attached to your report so it can't be filed from somewhere you aren't. You're clear to record.</div>`;
 }
 
 function bindView(view){
@@ -1171,10 +1301,28 @@ function bindView(view){
 function bindRecord(){
   const p = currentProfile();
   if(!p) return;
+  const r = state.record;
+  document.querySelectorAll('[data-record-mode]').forEach(b=>{
+    b.addEventListener('click', ()=>{
+      state.record.mode = b.dataset.recordMode;
+      render();
+    });
+  });
+  const backBtn = document.querySelector('[data-record-back]');
+  if(backBtn) backBtn.addEventListener('click', ()=>{
+    stopCamera();
+    state.record = { mode:null, verifiedSpot:null, manualSpot:null, reportLocation:null, reportNote:'', stream:null, recorder:null, chunks:[], blobUrl:null, recording:false };
+    render();
+  });
+  if(!r.mode) return;
   const btn = document.getElementById('checkLocBtn');
   if(btn) btn.addEventListener('click', checkLocation);
   const manualBtn = document.getElementById('useManualLocBtn');
   if(manualBtn) manualBtn.addEventListener('click', useManualLocation);
+  const reportLocBtn = document.getElementById('checkReportLocBtn');
+  if(reportLocBtn) reportLocBtn.addEventListener('click', checkReportLocation);
+  const noteInput = document.getElementById('reportNoteInput');
+  if(noteInput) noteInput.addEventListener('input', ()=>{ state.record.reportNote = noteInput.value; });
   renderCamArea();
 }
 function useManualLocation(){
@@ -1222,13 +1370,29 @@ function checkLocation(){
     banner.innerHTML = `<div class="banner warn">${esc(statusText)}</div>`;
   });
 }
+function checkReportLocation(){
+  const banner = document.getElementById('locBanner');
+  getPositionSafe(pos=>{
+    const {latitude, longitude} = pos.coords;
+    state.record.reportLocation = { lat:latitude, lng:longitude, capturedAt:new Date().toISOString() };
+    banner.innerHTML = bannerReportLocation(state.record.reportLocation);
+    document.getElementById('checkReportLocBtn').textContent = 'Re-check location';
+    document.getElementById('checkReportLocBtn').classList.remove('signal');
+    document.getElementById('checkReportLocBtn').classList.add('secondary');
+    renderCamArea();
+  }, err=>{
+    banner.innerHTML = `<div class="banner err">We couldn't get your location (${esc(friendlyGeoError(err))}). Illegal-dumping reports need a live location, so this can't be entered manually.</div>`;
+  }, statusText=>{
+    banner.innerHTML = `<div class="banner warn">${esc(statusText)}</div>`;
+  });
+}
 
 function renderCamArea(){
   const area = document.getElementById('camArea');
   if(!area) return;
   const r = state.record;
-  if(!r.verifiedSpot && !r.manualSpot){
-    area.innerHTML = `<p class="hint">Camera unlocks once your location is verified or entered manually above.</p>`;
+  if(!recordLocationReady()){
+    area.innerHTML = `<p class="hint">${r.mode==='report' ? 'Camera unlocks once your location is captured above.' : 'Camera unlocks once your location is verified or entered manually above.'}</p>`;
     return;
   }
   if(r.blobUrl){
@@ -1325,10 +1489,16 @@ async function submitDrop(){
   const p = currentProfile();
   if(!p) return;
   const r = state.record;
+  const area = document.getElementById('camArea');
+
+  if(r.mode==='report'){
+    await submitIllegalDumpingReport(p, area);
+    return;
+  }
+
   const isManual = !r.verifiedSpot && !!r.manualSpot;
   const spotName = isManual ? r.manualSpot.name : r.verifiedSpot.name;
   const earned = 15 + Math.floor(Math.random()*16); // 15-30 credits
-  const area = document.getElementById('camArea');
   if(isManual){
     // Manual entries aren't GPS-checked, so hold the credit until it's reviewed
     // instead of adding it immediately like a verified-spot drop.
@@ -1351,6 +1521,48 @@ async function submitDrop(){
   document.getElementById('checkLocBtn').textContent = 'Check my location';
   document.getElementById('checkLocBtn').classList.add('signal');
   document.getElementById('checkLocBtn').classList.remove('secondary');
+}
+
+async function submitIllegalDumpingReport(p, area){
+  const r = state.record;
+  const mobile = state.currentUser;
+  const earned = 20 + Math.floor(Math.random()*21); // 20-40 credits, paid only on approval
+  const now = new Date().toISOString();
+  const note = (r.reportNote||'').trim();
+
+  // Credit stays pending on the citizen's own history until a municipal
+  // corporation reviews the report — same "pending" mechanism used for
+  // manual-location drops, so it flows through the existing rewards queue.
+  p.history.unshift({
+    type:'pending',
+    desc: note ? `Illegal dumping report — "${note}" — pending municipal review` : 'Illegal dumping report — pending municipal review',
+    amount: earned,
+    date: now
+  });
+  await persistProfiles();
+
+  // Full report (with location + video note) goes to the municipal dashboard.
+  state.authorityReports = state.authorityReports || [];
+  state.authorityReports.unshift({
+    id: 'rep'+Date.now(),
+    user: mobile,
+    userName: displayName(p),
+    description: note || 'Illegal dumping reported via live camera',
+    location: r.reportLocation,
+    credits: earned,
+    date: now,
+    historyDate: now,
+    status: 'Pending',
+    source: 'Illegal dumping report',
+    videoCaptured: true
+  });
+  await saveData('authority-reports', true, state.authorityReports);
+
+  area.innerHTML = `<div class="banner warn"><strong>Report sent to your municipal corporation.</strong> They'll review the video and location — ${earned} credits are added to your account only once they accept it for cleanup.</div>
+    <button type="button" class="btn signal" data-go="account" style="margin-top:10px;">View my account</button>`;
+
+  state.record = { mode:null, verifiedSpot:null, manualSpot:null, reportLocation:null, reportNote:'', stream:null, recorder:null, chunks:[], blobUrl:null, recording:false };
+  area.querySelector('[data-go]').addEventListener('click', ()=> setView('account'));
 }
 
 /* ================= PLANT A SAPLING ================= */
@@ -2156,7 +2368,7 @@ function viewAccount(){
       ${history.map(h=>`
         <div class="histrow">
           <div>${esc(h.desc)}<div class="when">${fmtDate(h.date)}</div></div>
-          <div class="amt ${h.type==='earn'?'plus':h.type==='pending'?'':'minus'}">${h.type==='earn'?'+':h.type==='pending'?'':'-'}${h.amount}${h.type==='pending'?' (pending)':''}</div>
+          <div class="amt ${h.type==='earn'?'plus':h.type==='pending'||h.type==='rejected'?'':'minus'}">${h.type==='earn'?'+':h.type==='pending'?'':h.type==='rejected'?'✕':'-'}${h.type==='rejected'?'':h.amount}${h.type==='pending'?' (pending)':''}${h.type==='rejected'?' Not accepted':''}</div>
         </div>
       `).join('')}
     </div>`}
@@ -3019,11 +3231,12 @@ function authorityActivityRows(rows){
   if(!rows.length) return `<tr><td colspan="5"><div class="admin-empty">No activity found.</div></td></tr>`;
   return rows.map(a=>{
     const pending=a.type==='pending';
+    const rejected=a.type==='rejected';
     return `<tr>
       <td><div class="admin-user">${esc(a.user||'Citizen')}<small>${esc(a.mobile||'')}</small></div></td>
       <td>${esc(a.desc||'—')}</td>
-      <td><span class="admin-pill ${pending?'pending':'ok'}">${pending?'Pending review':'Verified'}</span></td>
-      <td><strong>${a.amount ? (pending ? '+' : '+')+a.amount : '—'}</strong></td>
+      <td><span class="admin-pill ${pending?'pending':rejected?'danger':'ok'}">${pending?'Pending review':rejected?'Not accepted':'Verified'}</span></td>
+      <td><strong>${rejected ? '—' : (a.amount ? '+'+a.amount : '—')}</strong></td>
       <td>${esc(a.date ? fmtDate(a.date) : '—')}</td>
     </tr>`;
   }).join('');
@@ -3052,7 +3265,10 @@ function viewAuthorityReports(s){
           <td>${esc(r.source||'CleanCred')}</td>
           <td>${esc(r.date ? fmtDate(r.date) : '—')}</td>
           <td><span class="admin-pill ${r.status==='Approved'?'ok':r.status==='Rejected'?'danger':'pending'}">${esc(r.status||'Pending')}</span></td>
-          <td>${r.status==='Pending' ? `<button type="button" class="btn signal" data-review-report="${esc(r.id)}">Review</button>` : `<span class="admin-pill neutral">Processed</span>`}</td>
+          <td>${r.status==='Pending' ? (r.source==='Illegal dumping report'
+              ? `<div style="display:flex; gap:6px; flex-wrap:wrap;"><button type="button" class="btn signal" data-review-report="${esc(r.id)}" data-review-decision="Approved">Accept for cleanup</button><button type="button" class="btn secondary" data-review-report="${esc(r.id)}" data-review-decision="Rejected">Reject</button></div>`
+              : `<button type="button" class="btn signal" data-review-report="${esc(r.id)}" data-review-decision="Approved">Review</button>`)
+            : `<span class="admin-pill neutral">Processed</span>`}</td>
         </tr>`).join('') : `<tr><td colspan="6"><div class="admin-empty">No reports are waiting for review.</div></td></tr>`}</tbody>
       </table>
     </div>
@@ -3128,7 +3344,7 @@ function bindAuthority(){
   const newDrive=document.getElementById('newDriveBtn');
   if(newDrive) newDrive.addEventListener('click',openAuthorityDriveModal);
   document.querySelectorAll('[data-reward-index]').forEach(btn=>btn.addEventListener('click',()=>approveAuthorityReward(parseInt(btn.dataset.rewardIndex,10))));
-  document.querySelectorAll('[data-review-report]').forEach(btn=>btn.addEventListener('click',()=>reviewAuthorityReport(btn.dataset.reviewReport)));
+  document.querySelectorAll('[data-review-report]').forEach(btn=>btn.addEventListener('click',()=>reviewAuthorityReport(btn.dataset.reviewReport, btn.dataset.reviewDecision)));
 }
 
 function authorityLogin(){
@@ -3196,18 +3412,58 @@ async function approveAuthorityReward(displayIndex){
   render();
 }
 
-async function reviewAuthorityReport(id){
-  // Review action intentionally opens a decision dialog; approval calls the same
-  // reward path used by the Credits to reward queue.
+async function reviewAuthorityReport(id, decision){
+  decision = decision || 'Approved';
   const reports=(state.authorityReports||[]);
   const r=reports.find(x=>x.id===id);
   if(r){
-    r.status='Approved'; r.reviewedBy=state.authority.org; r.reviewedDate=new Date().toISOString();
+    // Find the matching pending credit entry on the citizen's own history
+    // (linked via historyDate + mobile), whichever way the decision goes.
+    const stats = authorityStats();
+    let match=null;
+    stats.profiles.forEach(([mobile,p])=>{
+      if(match) return;
+      const idx = (p.history||[]).findIndex(h=>h.type==='pending' && h.date===r.historyDate && mobile===r.user);
+      if(idx>-1) match = {mobile,p,index:idx,h:p.history[idx]};
+    });
+    if(decision==='Approved'){
+      // Pay it out, same as the Credits to reward queue does for
+      // manual-location drops.
+      if(match){
+        match.p.credits = (match.p.credits||0) + (match.h.amount||0);
+        match.p.history[match.index] = {
+          ...match.h,
+          type:'earn',
+          desc:(match.h.desc||'Pending activity').replace(' — pending municipal review','').replace(' — pending review','') + ' — approved by authority',
+          approvedBy: state.authority.org,
+          approvedDate: new Date().toISOString()
+        };
+        state.authorityRewards.unshift({ id:'rw'+Date.now(), user:match.mobile, amount:match.h.amount||0, approvedBy:state.authority.org, date:new Date().toISOString(), description:match.p.history[match.index].desc });
+        await saveData('authority-rewards', true, state.authorityRewards);
+      }
+      r.status='Approved';
+    } else {
+      // No credit — clear the pending entry so it can't also be approved
+      // from the Credits to reward queue.
+      if(match){
+        match.p.history[match.index] = {
+          ...match.h,
+          type:'rejected',
+          desc:(match.h.desc||'Pending activity').replace(' — pending municipal review','').replace(' — pending review','') + ' — not accepted by authority',
+          reviewedBy: state.authority.org,
+          reviewedDate: new Date().toISOString()
+        };
+      }
+      r.status='Rejected';
+    }
+    if(match) await persistProfiles();
+    r.reviewedBy=state.authority.org; r.reviewedDate=new Date().toISOString();
     await saveData('authority-reports',true,reports);
     render();
     return;
   }
-  // If it is a surfaced pending manual report, route the operator to rewards.
+  // If it is a surfaced pending manual report (no matching authorityReports
+  // entry), route the operator to the rewards queue to process it there.
   state.authority.section='rewards';
   render();
 }
